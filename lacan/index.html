@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Lacan🛋️ - Wordle lacaniano</title>
+  <meta name="description" content="Indovina la parola lacaniana del giorno in 6 tentativi. Da 5 a 7 lettere.">
+  <meta name="theme-color" content="#6aaa64" />
+  <style>
+    :root {
+      --green: #6aaa64;
+      --yellow: #c9b458;
+      --absent: #787c7e;
+      --bg: #ffffff;
+      --text: #1a1a1b;
+      --border: #d3d6da;
+      --border-filled: #878a8c;
+      --key-bg: #d3d6da;
+      --key-text: #1a1a1b;
+      --modal-bg: #ffffff;
+      --tile-size: 58px;
+      font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --green: #538d4e;
+        --yellow: #b59f3b;
+        --absent: #3a3a3c;
+        --bg: #121213;
+        --text: #ffffff;
+        --border: #3a3a3c;
+        --border-filled: #565758;
+        --key-bg: #818384;
+        --key-text: #ffffff;
+        --modal-bg: #1a1a1b;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+    body { display: flex; flex-direction: column; align-items: center; }
+    header {
+      width: 100%; max-width: 500px; height: 50px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding: 0 12px;
+    }
+    header h1 { font-size: 28px; margin: 0; letter-spacing: 1px; }
+    header button { background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; }
+    #hint { font-size: 14px; color: var(--absent); margin: 8px 0 0; text-align: center; }
+    #board-wrap { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; overflow: hidden; }
+    #board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 5px; padding: 10px; }
+    .row { display: grid; gap: 5px; }
+    .tile {
+      width: var(--tile-size); height: var(--tile-size);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: calc(var(--tile-size) * 0.55); font-weight: bold; text-transform: uppercase;
+      user-select: none;
+    }
+    .tile.filled { border-color: var(--border-filled); animation: pop .1s; }
+    .tile.correct, .tile.present, .tile.absent { color: #fff; border-color: transparent; }
+    .tile.correct { background: var(--green); }
+    .tile.present { background: var(--yellow); }
+    .tile.absent  { background: var(--absent); }
+    .tile.flip { animation: flip .5s ease forwards; }
+    .row.shake { animation: shake .5s; }
+    @keyframes pop { 50% { transform: scale(1.1); } }
+    @keyframes flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(-90deg); } 100% { transform: rotateX(0); } }
+    @keyframes shake { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-4px)} 40%,60%{transform:translateX(4px)} }
+
+    #keyboard { width: 100%; max-width: 500px; padding: 0 8px 8px; user-select: none; }
+    .krow { display: flex; justify-content: center; margin-bottom: 8px; gap: 6px; }
+    .key {
+      flex: 1; height: 58px; border: 0; border-radius: 4px;
+      background: var(--key-bg); color: var(--key-text);
+      font-weight: bold; font-size: 14px; text-transform: uppercase; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .key.wide { flex: 1.5; font-size: 12px; }
+    .key.correct { background: var(--green); color: #fff; }
+    .key.present { background: var(--yellow); color: #fff; }
+    .key.absent  { background: var(--absent); color: #fff; }
+    .spacer { flex: .5; }
+
+    #toast {
+      position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+      background: var(--text); color: var(--bg); padding: 12px 16px; border-radius: 4px;
+      font-weight: bold; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 20;
+    }
+    #toast.show { opacity: 1; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+    .modal.open { display: flex; }
+    .modal-body {
+      background: var(--modal-bg); color: var(--text); border-radius: 8px; padding: 20px;
+      max-width: 420px; width: 100%; max-height: 90vh; overflow: auto; position: relative;
+    }
+    .modal-body h2 { margin-top: 0; text-align: center; }
+    .close { position: absolute; top: 10px; right: 14px; background: none; border: none; font-size: 22px; color: var(--text); cursor: pointer; }
+    .stats { display: flex; justify-content: space-around; text-align: center; margin-bottom: 16px; }
+    .stats .n { font-size: 32px; }
+    .stats .l { font-size: 12px; }
+    .dist { font-size: 14px; }
+    .dist .bar-row { display: flex; align-items: center; margin: 3px 0; }
+    .dist .bar { background: var(--absent); color: #fff; text-align: right; padding: 0 6px; margin-left: 6px; min-width: 20px; }
+    .dist .bar.hl { background: var(--green); }
+    #share { display: block; margin: 16px auto 0; background: var(--green); color: #fff; border: 0; border-radius: 4px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; }
+    #answer { text-align: center; font-size: 18px; margin: 8px 0; }
+    #countdown { text-align: center; font-size: 14px; color: var(--absent); }
+    .ex { display: flex; gap: 4px; margin: 8px 0; }
+    .ex .tile { --tile-size: 36px; }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="btn-help" aria-label="Aiuto">❓</button>
+    <h1>LACAN🛋️</h1>
+    <button id="btn-stats" aria-label="Statistiche">📊</button>
+  </header>
+  <p id="hint"></p>
+  <div id="board-wrap"><div id="board"></div></div>
+  <div id="keyboard"></div>
+  <div id="toast"></div>
+
+  <div class="modal" id="help">
+    <div class="modal-body">
+      <button class="close" data-close>✕</button>
+      <h2>Come si gioca</h2>
+      <p>Indovina la <b>parola della psicoanalisi di Lacan</b> del giorno in 6 tentativi.</p>
+      <p>Ogni giorno la parola cambia, e anche la <b>lunghezza</b> (da 5 a 7 lettere): il numero di caselle ti dice quante lettere ha.</p>
+      <p>Dopo ogni tentativo il colore delle caselle ti dice quanto ci sei andato vicino:</p>
+      <div class="ex"><div class="tile correct">A</div><div class="tile">L</div><div class="tile">T</div><div class="tile">R</div><div class="tile">O</div></div>
+      <p><b>A</b> è nella parola e nel posto giusto.</p>
+      <div class="ex"><div class="tile">R</div><div class="tile present">E</div><div class="tile">A</div><div class="tile">L</div><div class="tile">E</div></div>
+      <p><b>E</b> è nella parola ma nel posto sbagliato.</p>
+      <div class="ex"><div class="tile">F</div><div class="tile">A</div><div class="tile">L</div><div class="tile">L</div><div class="tile absent">O</div></div>
+      <p><b>O</b> non c'è.</p>
+      <p>Qualsiasi sequenza di lettere della lunghezza giusta è un tentativo valido (il significante scivola, il dizionario pure).</p>
+      <p style="font-size: 13px; color: var(--absent);">Fatto da <a href="https://github.com/robomorelli" style="color: inherit;">robomorelli</a> · codice su <a href="https://github.com/robomorelli/wordle-it" style="color: inherit;">GitHub</a> · <a href="../" style="color: inherit;">Par🇮🇹le classico</a> · <a href="../napoli/" style="color: inherit;">Parolacc🍕</a></p>
+    </div>
+  </div>
+
+  <div class="modal" id="stats">
+    <div class="modal-body">
+      <button class="close" data-close>✕</button>
+      <h2>Statistiche</h2>
+      <div class="stats">
+        <div><div class="n" id="s-played">0</div><div class="l">Giocate</div></div>
+        <div><div class="n" id="s-win">0</div><div class="l">% Vinte</div></div>
+        <div><div class="n" id="s-streak">0</div><div class="l">Serie</div></div>
+        <div><div class="n" id="s-max">0</div><div class="l">Serie max</div></div>
+      </div>
+      <div class="dist" id="dist"></div>
+      <div id="answer"></div>
+      <div id="countdown"></div>
+      <button id="share">Condividi 📋</button>
+    </div>
+  </div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Parole della psicoanalisi lacaniana (5-7 lettere), NELL'ORDINE in cui escono (solo lettere A-Z).
+// La prima parola è quella del giorno START_DAY, la seconda del giorno dopo, ecc.
+// Finita la lista si ricomincia dall'inizio.
+//  - Parole nuove: aggiungile IN FONDO, cosi' i giorni gia' previsti non cambiano.
+//  - Correggere una parola al suo posto cambia solo il giorno in cui esce.
+//  - Togliere una parola fa slittare di un giorno tutte quelle dopo.
+// ---------------------------------------------------------------------------
+const WORDS = [
+  "ALTRO", "SINTOMO", "REALE", "GODERE", "OGGETTO", "FALLO",
+  "DOMANDA", "SAPERE", "PADRE", "BARRATO", "LEGGE", "SIMBOLO",
+  "IMAGO", "PAROLA", "BISOGNO", "CAUSA", "LETTERA", "MATEMA",
+  "MADRE", "NEVROSI", "ETICA", "SUTURA", "PSICOSI", "DIVISO",
+  "SCRITTI", "TAGLIO", "ANALISI",
+];
+
+// Data di partenza del conteggio: il giorno 0 del gioco (numera le partite).
+const EPOCH = new Date(2026, 0, 1);
+// Giorno (contato da EPOCH) in cui esce WORDS[0]. 265 = 23 settembre 2026.
+const START_DAY = 265;
+const MAX_GUESSES = 6;
+const STORAGE_KEY = "parole-lacan";
+const ORDER = WORDS.map(w => w.toUpperCase());
+
+function dayIndex(d = new Date()) {
+  const start = new Date(EPOCH.getFullYear(), EPOCH.getMonth(), EPOCH.getDate());
+  const today = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((today - start) / 86400000);
+}
+const DAY = dayIndex();
+const SOLUTION = ORDER[(((DAY - START_DAY) % ORDER.length) + ORDER.length) % ORDER.length];
+const LEN = SOLUTION.length;
+
+// --- stato persistente ------------------------------------------------------
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
+}
+const store = load();
+store.stats = store.stats || { played: 0, wins: 0, streak: 0, maxStreak: 0, dist: [0,0,0,0,0,0], lastWinDay: null };
+if (!store.game || store.game.day !== DAY) {
+  store.game = { day: DAY, guesses: [], status: "playing" };
+}
+const game = store.game;
+let current = "";
+
+// --- valutazione ------------------------------------------------------------
+function evaluate(guess, solution) {
+  const res = Array(guess.length).fill("absent");
+  const counts = {};
+  for (let i = 0; i < solution.length; i++) {
+    if (guess[i] === solution[i]) res[i] = "correct";
+    else counts[solution[i]] = (counts[solution[i]] || 0) + 1;
+  }
+  for (let i = 0; i < guess.length; i++) {
+    if (res[i] !== "correct" && counts[guess[i]] > 0) {
+      res[i] = "present";
+      counts[guess[i]]--;
+    }
+  }
+  return res;
+}
+
+// --- UI ---------------------------------------------------------------------
+const board = document.getElementById("board");
+const keyboard = document.getElementById("keyboard");
+document.getElementById("hint").textContent =
+  `Parola #${DAY + 1} · ${LEN} lettere`;
+
+function fitTiles() {
+  const byWidth = (Math.min(window.innerWidth, 500) - 20 - 5 * (LEN - 1)) / LEN;
+  const byHeight = (board.parentElement.clientHeight - 20 - 5 * 5) / 6;
+  const size = Math.max(24, Math.min(62, byWidth, byHeight));
+  document.documentElement.style.setProperty("--tile-size", size + "px");
+}
+
+const rows = [];
+for (let r = 0; r < MAX_GUESSES; r++) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.style.gridTemplateColumns = `repeat(${LEN}, 1fr)`;
+  const tiles = [];
+  for (let c = 0; c < LEN; c++) {
+    const t = document.createElement("div");
+    t.className = "tile";
+    row.appendChild(t);
+    tiles.push(t);
+  }
+  board.appendChild(row);
+  rows.push({ el: row, tiles });
+}
+
+const KEYS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["spacer","A","S","D","F","G","H","J","K","L","spacer"],
+  ["ENTER","Z","X","C","V","B","N","M","DEL"],
+];
+const keyEls = {};
+for (const line of KEYS) {
+  const kr = document.createElement("div");
+  kr.className = "krow";
+  for (const k of line) {
+    if (k === "spacer") { const s = document.createElement("div"); s.className = "spacer"; kr.appendChild(s); continue; }
+    const b = document.createElement("button");
+    b.className = "key" + (k.length > 1 ? " wide" : "");
+    b.textContent = k === "DEL" ? "⌫" : k === "ENTER" ? "INVIO" : k;
+    b.addEventListener("click", () => onKey(k));
+    kr.appendChild(b);
+    keyEls[k] = b;
+  }
+  keyboard.appendChild(kr);
+}
+
+const RANK = { absent: 1, present: 2, correct: 3 };
+function paintKeys() {
+  const best = {};
+  for (const g of game.guesses) {
+    evaluate(g, SOLUTION).forEach((s, i) => {
+      if (!best[g[i]] || RANK[s] > RANK[best[g[i]]]) best[g[i]] = s;
+    });
+  }
+  for (const [k, el] of Object.entries(keyEls)) {
+    el.classList.remove("correct", "present", "absent");
+    if (best[k]) el.classList.add(best[k]);
+  }
+}
+
+function renderRow(r, word, result, animate) {
+  const { tiles } = rows[r];
+  tiles.forEach((t, i) => {
+    t.textContent = word[i] || "";
+    t.className = "tile" + (word[i] ? " filled" : "");
+    if (result) {
+      const apply = () => { t.className = "tile " + result[i]; };
+      if (animate) {
+        setTimeout(() => { t.classList.add("flip"); setTimeout(apply, 250); }, i * 250);
+      } else apply();
+    }
+  });
+}
+
+function renderAll() {
+  game.guesses.forEach((g, r) => renderRow(r, g, evaluate(g, SOLUTION), false));
+  if (game.status === "playing" && game.guesses.length < MAX_GUESSES) {
+    renderRow(game.guesses.length, current, null, false);
+  }
+  paintKeys();
+}
+
+let toastTimer;
+function toast(msg, ms = 1500) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), ms);
+}
+
+const WIN_MSG = ["Si 'nu geni'!", "Maronna mia!", "Bravo guagliò!", "Buono buono", "Ce l'hai fatta", "Pe' nu pelo!"];
+
+let busy = false;
+function onKey(k) {
+  if (busy || game.status !== "playing") return;
+  if (k === "ENTER") return submit();
+  if (k === "DEL") current = current.slice(0, -1);
+  else if (/^[A-Z]$/.test(k) && current.length < LEN) current += k;
+  renderRow(game.guesses.length, current, null, false);
+}
+
+function submit() {
+  const r = game.guesses.length;
+  if (current.length < LEN) {
+    rows[r].el.classList.remove("shake"); void rows[r].el.offsetWidth; rows[r].el.classList.add("shake");
+    toast("Mancano lettere, scié!");
+    return;
+  }
+  const guess = current;
+  current = "";
+  game.guesses.push(guess);
+  renderRow(r, guess, evaluate(guess, SOLUTION), true);
+  busy = true;
+  const done = guess === SOLUTION || game.guesses.length === MAX_GUESSES;
+  if (done) {
+    const won = guess === SOLUTION;
+    game.status = won ? "won" : "lost";
+    const s = store.stats;
+    s.played++;
+    if (won) {
+      s.wins++;
+      s.dist[game.guesses.length - 1]++;
+      s.streak = s.lastWinDay === DAY - 1 ? s.streak + 1 : 1;
+      s.lastWinDay = DAY;
+      s.maxStreak = Math.max(s.maxStreak, s.streak);
+    } else {
+      s.streak = 0;
+    }
+  }
+  save();
+  setTimeout(() => {
+    busy = false;
+    paintKeys();
+    if (game.status === "won") { toast(WIN_MSG[game.guesses.length - 1], 2000); setTimeout(openStats, 2200); }
+    else if (game.status === "lost") { toast(SOLUTION, 3000); setTimeout(openStats, 3200); }
+  }, LEN * 250 + 300);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector(".modal.open")) { if (e.key === "Escape") closeModals(); return; }
+  if (e.key === "Enter") onKey("ENTER");
+  else if (e.key === "Backspace") onKey("DEL");
+  else if (/^[a-zA-Z]$/.test(e.key)) onKey(e.key.toUpperCase());
+});
+
+// --- modali -----------------------------------------------------------------
+function closeModals() { document.querySelectorAll(".modal").forEach(m => m.classList.remove("open")); }
+document.querySelectorAll(".modal").forEach(m => m.addEventListener("click", e => {
+  if (e.target === m || e.target.hasAttribute("data-close")) closeModals();
+}));
+document.getElementById("btn-help").onclick = () => document.getElementById("help").classList.add("open");
+document.getElementById("btn-stats").onclick = openStats;
+
+let countdownTimer;
+function openStats() {
+  const s = store.stats;
+  document.getElementById("s-played").textContent = s.played;
+  document.getElementById("s-win").textContent = s.played ? Math.round(100 * s.wins / s.played) : 0;
+  document.getElementById("s-streak").textContent = s.streak;
+  document.getElementById("s-max").textContent = s.maxStreak;
+  const max = Math.max(1, ...s.dist);
+  document.getElementById("dist").innerHTML = s.dist.map((n, i) => {
+    const hl = game.status === "won" && game.guesses.length === i + 1 ? " hl" : "";
+    return `<div class="bar-row">${i + 1}<div class="bar${hl}" style="width:${Math.max(7, 100 * n / max)}%">${n}</div></div>`;
+  }).join("");
+  const over = game.status !== "playing";
+  document.getElementById("answer").textContent = over ? `La parola era: ${SOLUTION}` : "";
+  document.getElementById("share").style.display = over ? "block" : "none";
+  clearInterval(countdownTimer);
+  const tick = () => {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const sec = Math.floor((next - now) / 1000);
+    const pad = n => String(n).padStart(2, "0");
+    document.getElementById("countdown").textContent = over
+      ? `Prossima parola tra ${pad(Math.floor(sec / 3600))}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}` : "";
+  };
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+  document.getElementById("stats").classList.add("open");
+}
+
+document.getElementById("share").onclick = async () => {
+  const emoji = { correct: "🟩", present: "🟨", absent: "⬛" };
+  const grid = game.guesses.map(g => evaluate(g, SOLUTION).map(s => emoji[s]).join("")).join("\n");
+  const score = game.status === "won" ? game.guesses.length : "X";
+  const text = `Lacan🛋️ #${DAY + 1} (${LEN} lettere) ${score}/${MAX_GUESSES}\n\n${grid}\n\n${location.href}`;
+  try {
+    if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); toast("Copiato!"); }
+  } catch { toast("Non sono riuscito a copiare"); }
+};
+
+// --- avvio ------------------------------------------------------------------
+window.addEventListener("resize", fitTiles);
+fitTiles();
+renderAll();
+if (game.status !== "playing") setTimeout(openStats, 300);
+else if (!store.seenHelp) { store.seenHelp = true; save(); document.getElementById("help").classList.add("open"); }
+</script>
+</body>
+</html>
