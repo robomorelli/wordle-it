@@ -1,0 +1,63 @@
+# Pubblica su GitHub Pages un sito unico fatto da piu' branch:
+#   - master        -> radice del sito (home, napoli/, dict/, stats/, ...)
+#   - ogni branch X -> solo la sua cartella X/, pubblicata su /X/
+#     (es. branch "lacan" con la cartella lacan/ -> /wordle-it/lacan/)
+#
+# Per attivare una nuova pagina: crea un branch da master, mettici la cartella
+# con lo stesso nome del branch e fai push. Per disattivarla: cancella il branch.
+# Branch senza la cartella omonima vengono ignorati.
+#
+# Richiede: Settings -> Pages -> Source: "GitHub Actions".
+
+name: Pages multi-branch
+
+on:
+  push:
+    branches: ["**"]
+  delete:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Componi il sito
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+          mkdir _site
+          git archive origin/master | tar -x -C _site
+          rm -rf _site/.github _site/.idea
+          for ref in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin); do
+            case "$ref" in master|HEAD|*/*) continue ;; esac
+            if git cat-file -e "origin/$ref:$ref" 2>/dev/null; then
+              echo "Pubblico il branch $ref su /$ref/"
+              rm -rf "_site/$ref"
+              git archive "origin/$ref" "$ref" | tar -x -C _site
+            else
+              echo "Salto il branch $ref (manca la cartella $ref/)"
+            fi
+          done
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
