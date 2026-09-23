@@ -8,6 +8,9 @@
 # Branch senza la cartella omonima vengono ignorati.
 #
 # Richiede: Settings -> Pages -> Source: "GitHub Actions".
+#
+# Pages accetta deploy solo da master: un push su un altro branch non fa il
+# deploy, ma avvia questo stesso workflow su master, che pubblica tutto.
 
 name: Pages multi-branch
 
@@ -17,18 +20,28 @@ on:
   delete:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  trigger:
+    if: github.ref != 'refs/heads/master'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Avvia il deploy su master
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref master
+
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
