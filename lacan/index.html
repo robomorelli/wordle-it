@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Lacan🛋️ - Wordle lacaniano</title>
+  <title>Lacan🍆 - Wordle lacaniano</title>
   <meta name="description" content="Indovina la parola lacaniana del giorno in 6 tentativi. Da 5 a 7 lettere.">
   <meta name="theme-color" content="#6aaa64" />
   <style>
@@ -113,7 +113,7 @@
 <body>
   <header>
     <button id="btn-help" aria-label="Aiuto">❓</button>
-    <h1>LACAN🛋️</h1>
+    <h1>LACAN🍆</h1>
     <button id="btn-stats" aria-label="Statistiche">📊</button>
   </header>
   <p id="hint"></p>
@@ -414,7 +414,7 @@ document.getElementById("share").onclick = async () => {
   const emoji = { correct: "🟩", present: "🟨", absent: "⬛" };
   const grid = game.guesses.map(g => evaluate(g, SOLUTION).map(s => emoji[s]).join("")).join("\n");
   const score = game.status === "won" ? game.guesses.length : "X";
-  const text = `Lacan🛋️ #${DAY + 1} (${LEN} lettere) ${score}/${MAX_GUESSES}\n\n${grid}\n\n${location.href}`;
+  const text = `Lacan🍆 #${DAY + 1} (${LEN} lettere) ${score}/${MAX_GUESSES}\n\n${grid}\n\n${location.href}`;
   try {
     if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) await navigator.share({ text });
     else { await navigator.clipboard.writeText(text); toast("Copiato!"); }
